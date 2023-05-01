@@ -26,51 +26,92 @@ def start(update, context):
     else:
         update.message.reply_text('Sorry, you are not authorized to use this bot.')
 
-# Define the callback handler for the buttons
+user_history = {}
+
+def push_user_history(chat_id, state):
+    if chat_id not in user_history:
+        user_history[chat_id] = []
+    user_history[chat_id].append(state)
+
+def pop_user_history(chat_id):
+    if chat_id in user_history and user_history[chat_id]:
+        return user_history[chat_id].pop()
+    return None
+
+def handle_back_button(update, context):
+    query = update.callback_query
+    chat_id = query.message.chat_id
+    prev_state = pop_user_history(chat_id)
+
+    if prev_state == 'server':
+        handle_server_button(update, context)
+    elif prev_state == 'server_info':
+        handle_server_info_button(update, context, None)  # Pass the appropriate server_name value
+    elif prev_state == 'all':
+        handle_all_button(update, context)
+
+def handle_server_button(update, context):
+    query = update.callback_query
+    servers = api.get_servers()
+    buttons = [[InlineKeyboardButton(server, callback_data=f'server_{server}')] for server in servers]
+    buttons.append([InlineKeyboardButton("⬅️ Back", callback_data='back')])
+    reply_markup = InlineKeyboardMarkup(buttons)
+    query.edit_message_text(text='Please choose a server:', reply_markup=reply_markup)
+
+def handle_server_info_button(update, context, server_name):
+    query = update.callback_query
+    now = jdatetime.datetime.now()
+    data = api.point_data(server_name)
+    buttons = [
+        [InlineKeyboardButton("DNS Settings", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dns")],
+        [InlineKeyboardButton("CDN Dashboard", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dashboard")],
+        [InlineKeyboardButton("⬅️ Back", callback_data='back')]
+    ]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    query.edit_message_text(text=f"{data}\n📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}", parse_mode=telegram.ParseMode.HTML, reply_markup=reply_markup)
+
+def handle_all_button(update, context):
+    query = update.callback_query
+    servers = api.get_servers()
+    total_info = []
+    now = jdatetime.datetime.now()
+    with ThreadPoolExecutor() as executor:
+        future_data = {executor.submit(api.point_data, server): server for server in servers}
+        for future in concurrent.futures.as_completed(future_data):
+            server = future_data[future]
+            try:
+                data = future.result()
+                total_info.append(data)
+            except Exception as exc:
+                print('%r generated an exception: %s' % (server, exc))
+    buttons = [[InlineKeyboardButton("⬅️ Back", callback_data='back')]]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    query.edit_message_text(text=f'\n ----------------------------- \n'.join(total_info)+f"📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}", parse_mode=telegram.ParseMode.HTML, reply_markup=reply_markup)
+
+def handle_back_button(update, context):
+    query = update.callback_query
+    chat_id = query.message.chat_id
+    if chat_id in approved_chat_ids:
+        # Define the keyboard layout
+        keyboard = [[InlineKeyboardButton("Server", callback_data='server')],[InlineKeyboardButton("All", callback_data='all')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        # Edit the message with the keyboard layout
+        query.edit_message_text(text='Welcome to ArvanCDNcloud monitoring', reply_markup=reply_markup)
+    else:
+        query.edit_message_text(text='Sorry, you are not authorized to use this bot.')
+
 def button(update, context):
     query = update.callback_query
     if query.data == 'server':
-        servers = api.get_servers()
-        buttons = [[InlineKeyboardButton(server, callback_data=f'server_{server}')] for server in servers]
-        buttons.append([InlineKeyboardButton("⬅️ Back", callback_data='back')])
-        reply_markup = InlineKeyboardMarkup(buttons)
-        query.edit_message_text(text='Please choose a server:', reply_markup=reply_markup)
+        handle_server_button(update, context)
     elif query.data.startswith('server_'):
         server_name = query.data.replace('server_', '')
-        now = jdatetime.datetime.now()
-        data = api.point_data(server_name)
-        buttons = [[InlineKeyboardButton("DNS Settings", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dns")],[InlineKeyboardButton("CDN Dashboard", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dashboard")],[InlineKeyboardButton("⬅️ Back", callback_data='back')]]
-        reply_markup = InlineKeyboardMarkup(buttons)
-        # Do something with the selected server...
-        query.edit_message_text(text=f"{data}\n📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}",parse_mode=telegram.ParseMode.HTML,reply_markup=reply_markup)
+        handle_server_info_button(update, context, server_name)
     elif query.data == 'all':
-        servers = api.get_servers()
-        total_info = []
-        now = jdatetime.datetime.now()
-        with ThreadPoolExecutor() as executor:
-            future_data = {executor.submit(api.point_data, server): server for server in servers}
-            for future in concurrent.futures.as_completed(future_data):
-                server = future_data[future]
-                try:
-                    data = future.result()
-                    total_info.append(data)
-                except Exception as exc:
-                    print('%r generated an exception: %s' % (server, exc))
-        buttons = [[InlineKeyboardButton("⬅️ Back", callback_data='back')]]
-        reply_markup = InlineKeyboardMarkup(buttons)
-        query.edit_message_text(text=f'\n ----------------------------- \n'.join(total_info)+f"📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}",parse_mode=telegram.ParseMode.HTML,reply_markup=reply_markup)
+        handle_all_button(update, context)
     elif query.data == 'back':
-        chat_id = query.message.chat_id
-        if chat_id in approved_chat_ids:
-            # Define the keyboard layout
-            keyboard = [[InlineKeyboardButton("Server", callback_data='server')],[InlineKeyboardButton("All", callback_data='all')]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-    
-            # Edit the message with the keyboard layout
-            query.edit_message_text(text='Welcome to ArvanCDNcloud monitoring', reply_markup=reply_markup)
-        else:
-            query.edit_message_text(text='Sorry, you are not authorized to use this bot.')
-
+        handle_back_button(update, context)
 
 
 

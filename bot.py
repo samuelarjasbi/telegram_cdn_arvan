@@ -38,8 +38,10 @@ def button(update, context):
         server_name = query.data.replace('server_', '')
         now = jdatetime.datetime.now()
         data = api.point_data(server_name)
+        buttons = [[InlineKeyboardButton("DNS Settings", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dns")],[InlineKeyboardButton("CDN Dashboard", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dashboard")]]
+        reply_markup = InlineKeyboardMarkup(buttons)
         # Do something with the selected server...
-        query.edit_message_text(text=f"{data}\n📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}",parse_mode=telegram.ParseMode.HTML)
+        query.edit_message_text(text=f"{data}\n📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}",parse_mode=telegram.ParseMode.HTML,reply_markup=reply_markup)
     elif query.data == 'all':
         servers = api.get_servers()
         total_info = []
@@ -54,8 +56,8 @@ def button(update, context):
                 except Exception as exc:
                     print('%r generated an exception: %s' % (server, exc))
         query.edit_message_text(text=f'\n ----------------------------- \n'.join(total_info)+f"📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}",parse_mode=telegram.ParseMode.HTML)
-        
-        
+
+
 
 
 

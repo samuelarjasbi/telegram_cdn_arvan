@@ -32,13 +32,14 @@ def button(update, context):
     if query.data == 'server':
         servers = api.get_servers()
         buttons = [[InlineKeyboardButton(server, callback_data=f'server_{server}')] for server in servers]
+        buttons.append([InlineKeyboardButton("⬅️ Back", callback_data='back')])
         reply_markup = InlineKeyboardMarkup(buttons)
         query.edit_message_text(text='Please choose a server:', reply_markup=reply_markup)
     elif query.data.startswith('server_'):
         server_name = query.data.replace('server_', '')
         now = jdatetime.datetime.now()
         data = api.point_data(server_name)
-        buttons = [[InlineKeyboardButton("DNS Settings", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dns")],[InlineKeyboardButton("CDN Dashboard", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dashboard")]]
+        buttons = [[InlineKeyboardButton("DNS Settings", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dns")],[InlineKeyboardButton("CDN Dashboard", url=f"https://panel.arvancloud.ir/cdn/{server_name}/dashboard")],[InlineKeyboardButton("⬅️ Back", callback_data='back')]]
         reply_markup = InlineKeyboardMarkup(buttons)
         # Do something with the selected server...
         query.edit_message_text(text=f"{data}\n📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}",parse_mode=telegram.ParseMode.HTML,reply_markup=reply_markup)
@@ -55,8 +56,20 @@ def button(update, context):
                     total_info.append(data)
                 except Exception as exc:
                     print('%r generated an exception: %s' % (server, exc))
-        query.edit_message_text(text=f'\n ----------------------------- \n'.join(total_info)+f"📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}",parse_mode=telegram.ParseMode.HTML)
-
+        buttons = [[InlineKeyboardButton("⬅️ Back", callback_data='back')]]
+        reply_markup = InlineKeyboardMarkup(buttons)
+        query.edit_message_text(text=f'\n ----------------------------- \n'.join(total_info)+f"📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}",parse_mode=telegram.ParseMode.HTML,reply_markup=reply_markup)
+    elif query.data == 'back':
+        chat_id = query.message.chat_id
+        if chat_id in approved_chat_ids:
+            # Define the keyboard layout
+            keyboard = [[InlineKeyboardButton("Server", callback_data='server')],[InlineKeyboardButton("All", callback_data='all')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+    
+            # Edit the message with the keyboard layout
+            query.edit_message_text(text='Welcome to ArvanCDNcloud monitoring', reply_markup=reply_markup)
+        else:
+            query.edit_message_text(text='Sorry, you are not authorized to use this bot.')
 
 
 

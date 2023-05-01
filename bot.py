@@ -1,6 +1,8 @@
 import telegram
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
+from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 import signal
 import api
 import jdatetime
@@ -41,9 +43,17 @@ def button(update, context):
     elif query.data == 'all':
         servers = api.get_servers()
         total_info = []
-        for i in servers:
-            total_info.append(api.point_data(i))
-        query.edit_message_text(text=f"\n ----------------------------- \n📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}".join(total_info),parse_mode=telegram.ParseMode.HTML)
+        now = jdatetime.datetime.now()
+        with ThreadPoolExecutor() as executor:
+            future_data = {executor.submit(api.point_data, server): server for server in servers}
+            for future in concurrent.futures.as_completed(future_data):
+                server = future_data[future]
+                try:
+                    data = future.result()
+                    total_info.append(data)
+                except Exception as exc:
+                    print('%r generated an exception: %s' % (server, exc))
+        query.edit_message_text(text=f'\n ----------------------------- \n'.join(total_info)+f"📅<b>time:</b> {now.strftime('%Y/%m/%d %H:%M:%S')}",parse_mode=telegram.ParseMode.HTML)
         
         
 
